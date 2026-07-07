@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -1388,12 +1388,12 @@ export const getStyles = (COLORS) => StyleSheet.create({
 
   /* Bottom Tab Navigation Bar */
   tabBar: {
-    height: 60,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'android' ? 40 : 28, // Fix for system navigation bar overlap
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.card,
-    paddingBottom: 4,
   },
   tabItem: {
     flex: 1,

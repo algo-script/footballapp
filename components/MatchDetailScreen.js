@@ -7,18 +7,37 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { ThemeContext } from '../context/ThemeContext';
+import { ConfigContext } from '../context/ConfigContext';
 import FotmobImage from './FotmobImage';
+import AdCard from './AdCard';
+import { handleConfigAction } from '../utils/adAction';
 
 const api = require('../apis.js');
 
 export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
+  const { configData } = useContext(ConfigContext);
   const { matchId } = params;
   const [matchTab, setMatchTab] = useState('facts');
   const [statsPeriod, setStatsPeriod] = useState('full'); // 'full', 'first', 'second'
   const [facts, setFacts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const renderAdCard = (marginTop = 16, marginBottom = 0) => {
+    const screenConfig = configData?.match_detail_screen || {};
+    const masterEnable = configData?.show_ads?.enable !== false;
+    const showAds = masterEnable && screenConfig.enable && Array.isArray(screenConfig.ads) && screenConfig.ads.length > 0;
+    if (showAds) {
+      const adItem = screenConfig.ads[Math.floor(Math.random() * screenConfig.ads.length)];
+      return (
+        <View style={{ marginHorizontal: 16, marginTop, marginBottom }}>
+          <AdCard ad={adItem} pushScreen={pushScreen} />
+        </View>
+      );
+    }
+    return null;
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -202,16 +221,29 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
       {/* Match Nav Tabs */}
       <View style={{ borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8 }}>
-          {['facts', 'lineup', 'stats', 'h2h'].map(tab => (
-            <Pressable key={tab} style={[styles.detailTabItem, matchTab === tab && styles.detailTabItemActive]} onPress={() => setMatchTab(tab)}>
-              <Text style={[styles.detailTabLabel, matchTab === tab && styles.detailTabLabelActive]}>{tab.toUpperCase()}</Text>
+          {[
+            { id: 'facts', actionKey: 'detail_tab_facts' },
+            { id: 'lineup', actionKey: 'detail_tab_lineup' },
+            { id: 'stats', actionKey: 'detail_tab_stats' },
+            { id: 'h2h', actionKey: 'detail_tab_h2h' }
+          ].map(tab => (
+            <Pressable key={tab.id} style={[styles.detailTabItem, matchTab === tab.id && styles.detailTabItemActive]} onPress={() => {
+              setMatchTab(tab.id);
+              const parentConfig = configData?.match_detail_screen;
+              const actionConfig = parentConfig?.content?.[tab.actionKey];
+              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+            }}>
+              <Text style={[styles.detailTabLabel, matchTab === tab.id && styles.detailTabLabelActive]}>{tab.id.toUpperCase()}</Text>
             </Pressable>
           ))}
         </ScrollView>
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.detailScrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.detailScrollContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+        {/* Ad Placed at Top of Content */}
+        {renderAdCard(16, 0)}
+
         {/* FACTS TAB */}
         {matchTab === 'facts' && (
           <View style={styles.statsSection}>
@@ -302,7 +334,11 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                     <View style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 2, backgroundColor: COLORS.border, marginLeft: -1 }} />
 
                     {tlEvents.map((event, idx) => (
-                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, minHeight: 44 }}>
+                      <Pressable key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, minHeight: 44 }} onPress={() => {
+                        const parentConfig = configData?.match_detail_screen;
+                  const actionConfig = parentConfig?.content?.timeline_event_click;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                      }}>
                         {/* Home Side */}
                         <View style={{ flex: 1, paddingRight: 12, alignItems: 'flex-end', justifyContent: 'center' }}>
                           {event.isHome && (
@@ -353,12 +389,13 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                             </View>
                           )}
                         </View>
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
                 </View>
               );
             })()}
+            {renderAdCard(16, 0)}
 
             {/* Match Information */}
             <View style={[styles.infoCard, { marginTop: 16 }]}>
@@ -386,6 +423,7 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                 </View>
               )}
             </View>
+            {renderAdCard(16, 0)}
 
             {/* Teams Form */}
             {(homeFormMatches.length > 0 || awayFormMatches.length > 0) && (
@@ -401,7 +439,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, paddingVertical: 4, borderRadius: 6 },
                           pressed && { backgroundColor: COLORS.cardLight }
                         ]}
-                        onPress={() => pushScreen && pushScreen('match', { matchId: m.matchId || m.id })}
+                        onPress={() => {
+                          if (pushScreen) {
+                            pushScreen('match', { matchId: m.matchId || m.id }, true);
+                            const parentConfig = configData?.match_detail_screen;
+                  const actionConfig = parentConfig?.content?.recent_match_click;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                          }
+                        }}
                       >
                         <FotmobImage id={m.homeTeam?.id} type="team" style={{ width: 24, height: 24 }} />
                         <View style={{ backgroundColor: m.result === 'W' ? COLORS.accentGreen : m.result === 'L' ? COLORS.accentRed : COLORS.textMuted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginHorizontal: 8, minWidth: 44, alignItems: 'center' }}>
@@ -423,7 +468,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, paddingVertical: 4, borderRadius: 6 },
                           pressed && { backgroundColor: COLORS.cardLight }
                         ]}
-                        onPress={() => pushScreen && pushScreen('match', { matchId: m.matchId || m.id })}
+                        onPress={() => {
+                          if (pushScreen) {
+                            pushScreen('match', { matchId: m.matchId || m.id }, true);
+                            const parentConfig = configData?.match_detail_screen;
+                  const actionConfig = parentConfig?.content?.recent_match_click;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                          }
+                        }}
                       >
                         <FotmobImage id={m.homeTeam?.id} type="team" style={{ width: 24, height: 24 }} />
                         <View style={{ backgroundColor: m.result === 'W' ? COLORS.accentGreen : m.result === 'L' ? COLORS.accentRed : COLORS.textMuted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginHorizontal: 8, minWidth: 44, alignItems: 'center' }}>
@@ -436,12 +488,17 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                 </View>
               </View>
             )}
+            {renderAdCard(16, 0)}
 
             {/* Coaches / Managers */}
             {coaches && (coaches.home || coaches.away) && (
               <View style={[styles.infoCard, { marginTop: 16 }]}>
                 <Text style={[styles.sectionSubTitle, { marginBottom: 12 }]}>Managers</Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Pressable style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }} onPress={() => {
+                  const parentConfig = configData?.match_detail_screen;
+                  const actionConfig = parentConfig?.content?.manager_click;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                }}>
                   <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
                     <FotmobImage id={coaches.homeId} type="coach" style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12, backgroundColor: '#333' }} />
                     <View style={{ flex: 1 }}>
@@ -456,9 +513,10 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                     </View>
                     <FotmobImage id={coaches.awayId} type="coach" style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#333' }} />
                   </View>
-                </View>
+                </Pressable>
               </View>
             )}
+            {renderAdCard(16, 0)}
 
             {/* Top Rating Players */}
             {(homeTopPlayers.length > 0 || awayTopPlayers.length > 0) && (
@@ -474,7 +532,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                           { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingVertical: 4, borderRadius: 6 },
                           pressed && { backgroundColor: COLORS.cardLight }
                         ]}
-                        onPress={() => pushScreen && pushScreen('player', { playerId: p.PlayerId })}
+                        onPress={() => {
+                          if (pushScreen) {
+                            pushScreen('player', { playerId: p.PlayerId }, true);
+                            const parentConfig = configData?.match_detail_screen;
+                            const actionConfig = parentConfig?.content?.top_player_click;
+                            if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                          }
+                        }}
                       >
                         <FotmobImage id={p.PlayerId} type="player" style={{ width: 32, height: 32, borderRadius: 16, marginRight: 8, backgroundColor: '#333' }} />
                         <View style={{ flex: 1 }}>
@@ -495,7 +560,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                           { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingVertical: 4, borderRadius: 6 },
                           pressed && { backgroundColor: COLORS.cardLight }
                         ]}
-                        onPress={() => pushScreen && pushScreen('player', { playerId: p.PlayerId })}
+                        onPress={() => {
+                          if (pushScreen) {
+                            pushScreen('player', { playerId: p.PlayerId }, true);
+                            const parentConfig = configData?.match_detail_screen;
+                            const actionConfig = parentConfig?.content?.top_player_click;
+                            if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                          }
+                        }}
                       >
                         <View style={{ backgroundColor: COLORS.accentGreen, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                           <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>{p.PlayerRating?.toFixed(1) || '-'}</Text>
@@ -521,7 +593,13 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
 
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
               {['first', 'second', 'full'].map(period => (
-                <Pressable key={period} onPress={() => setStatsPeriod(period)} style={{
+                <Pressable key={period} onPress={() => {
+                  setStatsPeriod(period);
+                  const actionKey = period === 'first' ? 'select_stats_period_first' : period === 'second' ? 'select_stats_period_second' : 'select_stats_period_full';
+                  const parentConfig = configData?.match_detail_screen;
+                  const actionConfig = parentConfig?.content?.[actionKey];
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                }} style={{
                   paddingHorizontal: 16, paddingVertical: 8, marginHorizontal: 4, borderRadius: 20,
                   backgroundColor: statsPeriod === period ? COLORS.accentGreen : COLORS.cardLight
                 }}>
@@ -590,7 +668,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                             { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingVertical: 4, borderRadius: 6 },
                             pressed && { backgroundColor: COLORS.cardLight }
                           ]}
-                          onPress={() => pushScreen && pushScreen('player', { playerId: p.playerId })}
+                          onPress={() => {
+                            if (pushScreen) {
+                              pushScreen('player', { playerId: p.playerId }, true);
+                              const parentConfig = configData?.match_detail_screen;
+                              const actionConfig = parentConfig?.content?.starting_player_click;
+                              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                            }
+                          }}
                         >
                           <Text style={{ color: COLORS.textMuted, width: 20, fontSize: 12 }}>{p.shirtNr}</Text>
                           <FotmobImage id={p.playerId} type="player" style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8, backgroundColor: '#333' }} />
@@ -619,7 +704,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                             { flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'flex-end', paddingVertical: 4, borderRadius: 6 },
                             pressed && { backgroundColor: COLORS.cardLight }
                           ]}
-                          onPress={() => pushScreen && pushScreen('player', { playerId: p.playerId })}
+                          onPress={() => {
+                            if (pushScreen) {
+                              pushScreen('player', { playerId: p.playerId }, true);
+                              const parentConfig = configData?.match_detail_screen;
+                              const actionConfig = parentConfig?.content?.starting_player_click;
+                              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                            }
+                          }}
                         >
                           {rating !== null && rating !== undefined && rating > 0 && (
                             <View style={{ backgroundColor: COLORS.accentGreen, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 4 }}>
@@ -634,6 +726,7 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                     })}
                   </View>
                 </View>
+                {renderAdCard(16, 16)}
 
                 <Text style={styles.sectionSubTitle}>Substitutes</Text>
                 <View style={[styles.infoCard, { flexDirection: 'row', justifyContent: 'space-between' }]}>
@@ -647,7 +740,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                             { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingVertical: 4, borderRadius: 6 },
                             pressed && { backgroundColor: COLORS.cardLight }
                           ]}
-                          onPress={() => pushScreen && pushScreen('player', { playerId: p.playerId })}
+                          onPress={() => {
+                            if (pushScreen) {
+                              pushScreen('player', { playerId: p.playerId }, true);
+                              const parentConfig = configData?.match_detail_screen;
+                              const actionConfig = parentConfig?.content?.substitute_player_click;
+                              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                            }
+                          }}
                         >
                           <Text style={{ color: COLORS.textMuted, width: 20, fontSize: 12 }}>{p.shirtNr}</Text>
                           <FotmobImage id={p.playerId} type="player" style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8, backgroundColor: '#333' }} />
@@ -672,7 +772,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                             { flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'flex-end', paddingVertical: 4, borderRadius: 6 },
                             pressed && { backgroundColor: COLORS.cardLight }
                           ]}
-                          onPress={() => pushScreen && pushScreen('player', { playerId: p.playerId })}
+                          onPress={() => {
+                            if (pushScreen) {
+                              pushScreen('player', { playerId: p.playerId }, true);
+                              const parentConfig = configData?.match_detail_screen;
+                              const actionConfig = parentConfig?.content?.substitute_player_click;
+                              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                            }
+                          }}
                         >
                           {rating !== null && rating !== undefined && rating > 0 && (
                             <View style={{ backgroundColor: COLORS.accentGreen, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 4 }}>
@@ -736,6 +843,7 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                 </View>
               );
             })()}
+            {renderAdCard(16, 16)}
 
             <Text style={styles.sectionSubTitle}>Recent Matches</Text>
             {facts?.h2h && facts.h2h.length > 0 ? (
@@ -754,7 +862,14 @@ export default function MatchDetailScreen({ params, popScreen, pushScreen }) {
                       { marginBottom: 12, paddingVertical: 12, paddingHorizontal: 12 },
                       pressed && { opacity: 0.9, backgroundColor: COLORS.cardLight }
                     ]}
-                    onPress={() => pushScreen && pushScreen('match', { matchId: matchItem.id || matchItem.matchId })}
+                    onPress={() => {
+                      if (pushScreen) {
+                        pushScreen('match', { matchId: matchItem.id || matchItem.matchId }, true);
+                        const parentConfig = configData?.match_detail_screen;
+                        const actionConfig = parentConfig?.content?.recent_match_click;
+                        if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                      }
+                    }}
                   >
                     <View style={{ alignItems: 'center', marginBottom: 12 }}>
                       <Text style={{ color: COLORS.textMuted, fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.5 }}>

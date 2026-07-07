@@ -7,12 +7,16 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { ThemeContext } from '../context/ThemeContext';
+import { ConfigContext } from '../context/ConfigContext';
 import FotmobImage from './FotmobImage';
+import AdCard from './AdCard';
+import { handleConfigAction } from '../utils/adAction';
 
 const api = require('../apis.js');
 
-export default function LeaguesTab({ onSelectLeague }) {
+export default function LeaguesTab({ onSelectLeague, pushScreen }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
+  const { configData } = useContext(ConfigContext);
   const [leaguesData, setLeaguesData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,6 +44,9 @@ export default function LeaguesTab({ onSelectLeague }) {
       ...prev,
       [ccode]: !prev[ccode]
     }));
+    const parentConfig = configData?.leagues_tab;
+                  const actionConfig = parentConfig?.content?.toggle_expand_country;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
   };
 
   if (loading) {
@@ -61,40 +68,67 @@ export default function LeaguesTab({ onSelectLeague }) {
   const popularLeagues = leaguesData?.selected?.league || [];
   const countryGroups = leaguesData?.group || [];
 
+  const adsConfig = configData?.leagues_tab_ads || {};
+  const masterEnable = configData?.show_ads?.enable !== false;
+  const showAds = masterEnable && adsConfig.enable && Array.isArray(adsConfig.url) && adsConfig.url.length > 0;
+  const cardFreq = adsConfig.card || 1;
+  let adCounter = 0;
+
   return (
     <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30, paddingHorizontal: 16, paddingTop: 16 }}>
       {/* 1. Popular Leagues */}
       <Text style={styles.sectionTitle}>⭐ Popular Leagues</Text>
       <View style={{ gap: 8, marginBottom: 24, marginTop: 8 }}>
-        {popularLeagues.map((item) => (
-          <Pressable
-            key={item.id}
-            style={styles.leagueListItem}
-            onPress={() => onSelectLeague(item)}
-          >
-            <FotmobImage
-              id={item.id}
-              type="league"
-              style={styles.leagueLogo}
-            />
-            <View style={styles.leagueListInfo}>
-              <Text style={styles.leagueListName}>{item.name}</Text>
-              <Text style={styles.leagueListCountry}>{item.lccode || 'INT'}</Text>
-            </View>
-            <Text style={styles.leagueListChevron}>→</Text>
-          </Pressable>
-        ))}
+        {popularLeagues.map((item, index) => {
+          let adItem = null;
+          if (showAds && (index + 1) % cardFreq === 0) {
+            adItem = adsConfig.url[adCounter % adsConfig.url.length];
+            adCounter++;
+          }
+          return (
+            <React.Fragment key={item.id}>
+              <Pressable
+                style={styles.leagueListItem}
+                onPress={() => {
+                  onSelectLeague(item);
+                  const parentConfig = configData?.leagues_tab;
+                  const actionConfig = parentConfig?.content?.popular_league_click;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                }}
+              >
+                <FotmobImage
+                  id={item.id}
+                  type="league"
+                  style={styles.leagueLogo}
+                />
+                <View style={styles.leagueListInfo}>
+                  <Text style={styles.leagueListName}>{item.name}</Text>
+                  <Text style={styles.leagueListCountry}>{item.lccode || 'INT'}</Text>
+                </View>
+                <Text style={styles.leagueListChevron}>→</Text>
+              </Pressable>
+              {adItem && <AdCard ad={adItem} pushScreen={pushScreen} />}
+            </React.Fragment>
+          );
+        })}
       </View>
 
       {/* 2. Country Wise Leagues (Expandable) */}
       <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>🌍 Countries</Text>
 
-      {countryGroups.map((group) => {
+      {countryGroups.map((group, index) => {
         const isExpanded = !!expandedCountries[group.ccode];
         const leaguesList = Array.isArray(group.league) ? group.league : (group.league ? [group.league] : []);
 
+        let adItemCountry = null;
+        if (showAds && (index + 1) % cardFreq === 0) {
+          adItemCountry = adsConfig.url[adCounter % adsConfig.url.length];
+          adCounter++;
+        }
+
         return (
-          <View key={group.ccode} style={{
+          <React.Fragment key={group.ccode}>
+            <View style={{
             backgroundColor: COLORS.card,
             borderRadius: 12,
             marginBottom: 10,
@@ -134,7 +168,12 @@ export default function LeaguesTab({ onSelectLeague }) {
                   <Pressable
                     key={item.id}
                     style={[styles.leagueListItem, { backgroundColor: COLORS.cardLight, marginVertical: 2, marginBottom: 0 }]}
-                    onPress={() => onSelectLeague(item)}
+                    onPress={() => {
+                      onSelectLeague(item);
+                      const parentConfig = configData?.leagues_tab;
+                  const actionConfig = parentConfig?.content?.country_league_click;
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                    }}
                   >
                     <FotmobImage
                       id={item.id}
@@ -150,6 +189,8 @@ export default function LeaguesTab({ onSelectLeague }) {
               </View>
             )}
           </View>
+          {adItemCountry && <AdCard ad={adItemCountry} pushScreen={pushScreen} />}
+        </React.Fragment>
         );
       })}
     </ScrollView>

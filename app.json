@@ -21,6 +21,7 @@
       "bundleIdentifier": "com.miralparmar05.goalsphere"
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "package": "com.miralparmar05.goalsphere",
       "backgroundColor": "#0A0D14",
       "enableProguardInReleaseBuilds": true,
@@ -41,6 +42,10 @@
       "eas": {
         "projectId": "1e24b750-754a-45dc-8e5c-d49d45530cec"
       }
-    }
+    },
+    "plugins": [
+      "expo-web-browser",
+      "@react-native-firebase/app"
+    ]
   }
 }

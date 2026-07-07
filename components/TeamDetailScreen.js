@@ -7,16 +7,35 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { ThemeContext } from '../context/ThemeContext';
+import { ConfigContext } from '../context/ConfigContext';
 import FotmobImage from './FotmobImage';
+import AdCard from './AdCard';
+import { handleConfigAction } from '../utils/adAction';
 
 const api = require('../apis.js');
 
 export default function TeamDetailScreen({ params, pushScreen }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
+  const { configData } = useContext(ConfigContext);
   const { teamId, teamName } = params;
   const [teamTab, setTeamTab] = useState('fixtures'); // 'fixtures', 'squad', 'tournaments', 'trophies'
   const [dynamicTeamData, setDynamicTeamData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const renderAdCard = (marginTop = 16, marginBottom = 0) => {
+    const screenConfig = configData?.team_detail_screen || {};
+    const masterEnable = configData?.show_ads?.enable !== false;
+    const showAds = masterEnable && screenConfig.enable && Array.isArray(screenConfig.ads) && screenConfig.ads.length > 0;
+    if (showAds) {
+      const adItem = screenConfig.ads[Math.floor(Math.random() * screenConfig.ads.length)];
+      return (
+        <View style={{ marginHorizontal: 16, marginTop, marginBottom }}>
+          <AdCard ad={adItem} pushScreen={pushScreen} />
+        </View>
+      );
+    }
+    return null;
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -76,9 +95,19 @@ export default function TeamDetailScreen({ params, pushScreen }) {
       {/* Tabs */}
       <View style={styles.detailTabBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['fixtures', 'squad', 'tournaments', 'trophies'].map((tab) => (
-            <Pressable key={tab} style={[styles.detailTabItem, teamTab === tab && styles.detailTabItemActive]} onPress={() => setTeamTab(tab)}>
-              <Text style={[styles.detailTabLabel, teamTab === tab && styles.detailTabLabelActive, { textTransform: 'capitalize' }]}>{tab}</Text>
+          {[
+            { id: 'fixtures', actionKey: 'team_tab_fixtures' },
+            { id: 'squad', actionKey: 'team_tab_squad' },
+            { id: 'tournaments', actionKey: 'team_tab_tournaments' },
+            { id: 'trophies', actionKey: 'team_tab_trophies' }
+          ].map((tab) => (
+            <Pressable key={tab.id} style={[styles.detailTabItem, teamTab === tab.id && styles.detailTabItemActive]} onPress={() => {
+              setTeamTab(tab.id);
+              const parentConfig = configData?.team_detail_screen;
+              const actionConfig = parentConfig?.content?.[tab.actionKey];
+              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+            }}>
+              <Text style={[styles.detailTabLabel, teamTab === tab.id && styles.detailTabLabelActive, { textTransform: 'capitalize' }]}>{tab.id}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -86,6 +115,8 @@ export default function TeamDetailScreen({ params, pushScreen }) {
 
       {/* Content */}
       <ScrollView style={styles.detailScrollContent} showsVerticalScrollIndicator={false}>
+        {renderAdCard(16, 0)}
+
         {isLoading ? (
           <ActivityIndicator size="large" color={COLORS.accentBlue} style={{ marginTop: 40 }} />
         ) : (
@@ -102,7 +133,14 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                     const awayScore = matchItem.aScore ?? '-';
                     const scoreStr = matchItem.status === 'F' ? `${homeScore} - ${awayScore}` : 'vs';
                     return (
-                      <Pressable key={matchItem.id || index} style={styles.h2hRow} onPress={() => pushScreen('match', { matchId: matchItem.id })}>
+                      <React.Fragment key={matchItem.id || index}>
+                        {index > 0 && index % 3 === 0 && renderAdCard(8, 8)}
+                        <Pressable style={styles.h2hRow} onPress={() => {
+                        pushScreen('match', { matchId: matchItem.id }, true);
+                        const parentConfig = configData?.team_detail_screen;
+                        const actionConfig = parentConfig?.content?.team_fixture_match_click;
+                        if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                      }}>
                         <View style={{ backgroundColor: COLORS.cardLight, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, marginBottom: 8, alignSelf: 'flex-start' }}>
                           <Text style={{ color: COLORS.text, fontSize: 10, fontWeight: 'bold' }}>{matchItem.lname || 'League'}</Text>
                         </View>
@@ -123,6 +161,7 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                           {matchItem.time || 'Scheduled'}
                         </Text>
                       </Pressable>
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -136,12 +175,19 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                   <Text style={styles.emptyText}>No squad data available for this team.</Text>
                 ) : (
                   squadGroups.map((section, sIdx) => (
-                    <View key={sIdx} style={{ marginBottom: 16 }}>
+                    <React.Fragment key={sIdx}>
+                      {sIdx > 0 && renderAdCard(16, 16)}
+                      <View style={{ marginBottom: 16 }}>
                       <Text style={[styles.sectionSubTitle, { textTransform: 'capitalize', marginBottom: 8 }]}>
                         {section.title}
                       </Text>
                       {section.members?.map((p) => (
-                        <Pressable key={p.id} style={styles.playerCardRow} onPress={() => pushScreen('player', { playerId: p.id })}>
+                        <Pressable key={p.id} style={styles.playerCardRow} onPress={() => {
+                          pushScreen('player', { playerId: p.id }, true);
+                          const parentConfig = configData?.team_detail_screen;
+                          const actionConfig = parentConfig?.content?.squad_player_click;
+                          if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                        }}>
                           <View style={styles.playerCardAvatarSmall}>
                             <FotmobImage id={p.id} type="player" style={{ width: 36, height: 36, borderRadius: 18 }} />
                           </View>
@@ -159,6 +205,7 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                         </Pressable>
                       ))}
                     </View>
+                    </React.Fragment>
                   ))
                 )}
               </View>
@@ -172,13 +219,21 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                   <Text style={styles.emptyText}>No tournaments found.</Text>
                 ) : (
                   tournaments.map((t, idx) => (
-                    <Pressable key={idx} style={[styles.infoCard, { marginBottom: 12, flexDirection: 'row', alignItems: 'center' }]} onPress={() => pushScreen('league', { league: { id: t.template_id, name: t.name } })}>
+                    <React.Fragment key={idx}>
+                      {idx > 0 && idx % 3 === 0 && renderAdCard(16, 16)}
+                      <Pressable style={[styles.infoCard, { marginBottom: 12, flexDirection: 'row', alignItems: 'center' }]} onPress={() => {
+                      pushScreen('league', { league: { id: t.template_id, name: t.name } }, true);
+                      const parentConfig = configData?.team_detail_screen;
+                      const actionConfig = parentConfig?.content?.participating_tournament_click;
+                      if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                    }}>
                       <FotmobImage id={t.template_id} type="league" style={{ width: 32, height: 32, marginRight: 16 }} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: 'bold' }}>{t.name}</Text>
                         <Text style={{ color: COLORS.textMuted, fontSize: 12 }}>Season: {t.season}</Text>
                       </View>
                     </Pressable>
+                    </React.Fragment>
                   ))
                 )}
               </View>
@@ -192,7 +247,9 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                   <Text style={styles.emptyText}>No trophy history found.</Text>
                 ) : (
                   trophies.map((t, idx) => (
-                    <View key={idx} style={[styles.infoCard, { marginBottom: 12 }]}>
+                    <React.Fragment key={idx}>
+                      {idx > 0 && idx % 4 === 0 && renderAdCard(16, 16)}
+                      <View style={[styles.infoCard, { marginBottom: 12 }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                         <FotmobImage id={t.tournamentTemplateId} type="league" style={{ width: 24, height: 24, marginRight: 12 }} />
                         <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: 'bold' }}>{t.name}</Text>
@@ -208,6 +265,7 @@ export default function TeamDetailScreen({ params, pushScreen }) {
                         </View>
                       </View>
                     </View>
+                    </React.Fragment>
                   ))
                 )}
               </View>

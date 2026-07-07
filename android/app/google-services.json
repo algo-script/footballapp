@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "463573041130",
+    "project_id": "football-49627",
+    "storage_bucket": "football-49627.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:463573041130:android:908fd323d4653b0b4cbc93",
+        "android_client_info": {
+          "package_name": "com.miralparmar05.goalsphere"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLZ-7obgrQheQNX1rBa3v3umwUxs8Oy1E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

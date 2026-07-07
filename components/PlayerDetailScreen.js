@@ -7,18 +7,37 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { ThemeContext } from '../context/ThemeContext';
+import { ConfigContext } from '../context/ConfigContext';
 import FotmobImage from './FotmobImage';
+import AdCard from './AdCard';
+import { handleConfigAction } from '../utils/adAction';
 
 const api = require('../apis.js');
 
-export default function PlayerDetailScreen({ params }) {
+export default function PlayerDetailScreen({ params, pushScreen }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
+  const { configData } = useContext(ConfigContext);
   const { playerId } = params;
 
   const [playerData, setPlayerData] = useState(null);
   const [playerExtraData, setPlayerExtraData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview'); // overview, career, stats, trophies, transfers
+
+  const renderAdCard = (marginTop = 16, marginBottom = 0) => {
+    const screenConfig = configData?.player_detail_screen || {};
+    const masterEnable = configData?.show_ads?.enable !== false;
+    const showAds = masterEnable && screenConfig.enable && Array.isArray(screenConfig.ads) && screenConfig.ads.length > 0;
+    if (showAds) {
+      const adItem = screenConfig.ads[Math.floor(Math.random() * screenConfig.ads.length)];
+      return (
+        <View style={{ marginTop, marginBottom }}>
+          <AdCard ad={adItem} pushScreen={pushScreen} />
+        </View>
+      );
+    }
+    return null;
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -79,22 +98,33 @@ export default function PlayerDetailScreen({ params }) {
         {/* Tab Navigator */}
         <View style={{ backgroundColor: COLORS.bg, zIndex: 10 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}>
-            {['overview', 'career', 'stats', 'trophies', 'transfers'].map((tab) => (
+            {[
+              { id: 'overview', actionKey: 'player_tab_overview' },
+              { id: 'career', actionKey: 'player_tab_career' },
+              { id: 'stats', actionKey: 'player_tab_stats' },
+              { id: 'trophies', actionKey: 'player_tab_trophies' },
+              { id: 'transfers', actionKey: 'player_tab_transfers' }
+            ].map((tab) => (
               <Pressable
-                key={tab}
+                key={tab.id}
                 style={{
                   paddingHorizontal: 16,
                   paddingVertical: 8,
                   borderRadius: 20,
-                  backgroundColor: activeTab === tab ? COLORS.accentGreen : COLORS.card,
+                  backgroundColor: activeTab === tab.id ? COLORS.accentGreen : COLORS.card,
                 }}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => {
+                  setActiveTab(tab.id);
+                  const parentConfig = configData?.player_detail_screen;
+                  const actionConfig = parentConfig?.content?.[tab.actionKey];
+                  if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                }}
               >
                 <Text style={{
-                  color: activeTab === tab ? COLORS.bg : COLORS.text,
+                  color: activeTab === tab.id ? COLORS.bg : COLORS.text,
                   fontWeight: 'bold',
                   textTransform: 'capitalize'
-                }}>{tab}</Text>
+                }}>{tab.id}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -102,20 +132,22 @@ export default function PlayerDetailScreen({ params }) {
 
         {/* Tab Content */}
         <View style={{ paddingHorizontal: 16, paddingBottom: 40 }}>
+          {renderAdCard(0, 16)}
+
           {activeTab === 'overview' && (
-            <PlayerOverviewTab player={playerData} extraData={playerExtraData} positionStr={positionStr} />
+            <PlayerOverviewTab player={playerData} extraData={playerExtraData} positionStr={positionStr} renderAdCard={renderAdCard} />
           )}
           {activeTab === 'career' && (
-            <PlayerCareerTab career={playerExtraData?.career || []} />
+            <PlayerCareerTab career={playerExtraData?.career || []} renderAdCard={renderAdCard} />
           )}
           {activeTab === 'stats' && (
-            <PlayerStatsTab stats={playerData.Stats || []} />
+            <PlayerStatsTab stats={playerData.Stats || []} renderAdCard={renderAdCard} />
           )}
           {activeTab === 'trophies' && (
-            <PlayerTrophiesTab trophies={playerData.Trophies?.PlayerTrophies || []} />
+            <PlayerTrophiesTab trophies={playerData.Trophies?.PlayerTrophies || []} renderAdCard={renderAdCard} />
           )}
           {activeTab === 'transfers' && (
-            <PlayerTransfersTab transfers={playerData.Transfers || []} />
+            <PlayerTransfersTab transfers={playerData.Transfers || []} renderAdCard={renderAdCard} />
           )}
         </View>
       </ScrollView>
@@ -123,7 +155,7 @@ export default function PlayerDetailScreen({ params }) {
   );
 }
 
-function PlayerOverviewTab({ player, extraData, positionStr }) {
+function PlayerOverviewTab({ player, extraData, positionStr, renderAdCard }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
   const traits = player.Traits?.Items || [];
 
@@ -158,6 +190,7 @@ function PlayerOverviewTab({ player, extraData, positionStr }) {
           </View>
         )}
       </View>
+      {renderAdCard && renderAdCard(16, 0)}
 
       {traits.length > 0 && (
         <View style={[styles.infoCard, { marginTop: 16 }]}>
@@ -179,7 +212,7 @@ function PlayerOverviewTab({ player, extraData, positionStr }) {
   );
 }
 
-function PlayerCareerTab({ career }) {
+function PlayerCareerTab({ career, renderAdCard }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
   if (career.length === 0) {
     return <Text style={styles.emptyText}>No career history available.</Text>;
@@ -189,7 +222,9 @@ function PlayerCareerTab({ career }) {
     <View style={styles.infoCard}>
       <Text style={styles.infoTitle}>Career History</Text>
       {career.map((entry, idx) => (
-        <View key={idx} style={{
+        <React.Fragment key={idx}>
+          {idx > 0 && idx % 3 === 0 && renderAdCard && renderAdCard(16, 16)}
+          <View style={{
           flexDirection: 'row',
           alignItems: 'center',
           paddingVertical: 12,
@@ -212,12 +247,13 @@ function PlayerCareerTab({ career }) {
             </View>
           )}
         </View>
+      </React.Fragment>
       ))}
     </View>
   );
 }
 
-function PlayerStatsTab({ stats }) {
+function PlayerStatsTab({ stats, renderAdCard }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
   if (stats.length === 0) {
     return <Text style={styles.emptyText}>No statistics available.</Text>;
@@ -226,7 +262,9 @@ function PlayerStatsTab({ stats }) {
   return (
     <View>
       {stats.map((season, idx) => (
-        <View key={idx} style={[styles.infoCard, { marginBottom: 12 }]}>
+        <React.Fragment key={idx}>
+          {idx > 0 && idx % 3 === 0 && renderAdCard && renderAdCard(0, 12)}
+          <View style={[styles.infoCard, { marginBottom: 12 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {season.TeamId > 0 && <FotmobImage type="team" id={season.TeamId} style={{ width: 20, height: 20 }} />}
@@ -262,12 +300,13 @@ function PlayerStatsTab({ stats }) {
             </View>
           </View>
         </View>
+        </React.Fragment>
       ))}
     </View>
   );
 }
 
-function PlayerTrophiesTab({ trophies }) {
+function PlayerTrophiesTab({ trophies, renderAdCard }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
   if (trophies.length === 0) {
     return <Text style={styles.emptyText}>No trophies available.</Text>;
@@ -276,7 +315,9 @@ function PlayerTrophiesTab({ trophies }) {
   return (
     <View>
       {trophies.map((teamTrophy, idx) => (
-        <View key={idx} style={[styles.infoCard, { marginBottom: 12 }]}>
+        <React.Fragment key={idx}>
+          {idx > 0 && idx % 2 === 0 && renderAdCard && renderAdCard(0, 12)}
+          <View style={[styles.infoCard, { marginBottom: 12 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
             <FotmobImage type="team" id={teamTrophy.TeamId} style={{ width: 24, height: 24 }} />
             <Text style={{ color: COLORS.text, fontWeight: 'bold', fontSize: 16 }}>{teamTrophy.TeamName}</Text>
@@ -302,12 +343,13 @@ function PlayerTrophiesTab({ trophies }) {
             </View>
           ))}
         </View>
+        </React.Fragment>
       ))}
     </View>
   );
 }
 
-function PlayerTransfersTab({ transfers }) {
+function PlayerTransfersTab({ transfers, renderAdCard }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
   if (transfers.length === 0) {
     return <Text style={styles.emptyText}>No transfer history available.</Text>;
@@ -316,7 +358,9 @@ function PlayerTransfersTab({ transfers }) {
   return (
     <View style={styles.infoCard}>
       {transfers.map((transfer, idx) => (
-        <View key={idx} style={{
+        <React.Fragment key={idx}>
+          {idx > 0 && idx % 3 === 0 && renderAdCard && renderAdCard(16, 16)}
+          <View style={{
           flexDirection: 'row',
           alignItems: 'center',
           paddingVertical: 12,
@@ -346,6 +390,7 @@ function PlayerTransfersTab({ transfers }) {
             </View>
           </View>
         </View>
+        </React.Fragment>
       ))}
     </View>
   );

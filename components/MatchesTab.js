@@ -9,7 +9,10 @@ import {
   Platform
 } from 'react-native';
 import { ThemeContext } from '../context/ThemeContext';
+import { ConfigContext } from '../context/ConfigContext';
 import FotmobImage from './FotmobImage';
+import AdCard from './AdCard';
+import { handleConfigAction } from '../utils/adAction';
 
 const api = require('../apis.js');
 
@@ -45,8 +48,9 @@ const formatDateToDDMMYYYY = (date) => {
   return `${dd}.${mm}.${yyyy}`;
 };
 
-export default function MatchesTab({ isMockMode, onSelectMatch }) {
+export default function MatchesTab({ isMockMode, onSelectMatch, pushScreen }) {
   const { theme: COLORS, styles } = useContext(ThemeContext);
+  const { configData } = useContext(ConfigContext);
   const [matchDate, setMatchDate] = useState(() => {
     const today = new Date();
     return formatDateToKey(today);
@@ -154,10 +158,16 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
 
   const prevMonth = () => {
     setCalendarMonth(new Date(calendarYear, calendarMonthIndex - 1, 1));
+    const parentConfig = configData?.matches_tab;
+    const actionConfig = parentConfig?.content?.prev_month;
+    if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
   };
 
   const nextMonth = () => {
     setCalendarMonth(new Date(calendarYear, calendarMonthIndex + 1, 1));
+    const parentConfig = configData?.matches_tab;
+    const actionConfig = parentConfig?.content?.next_month;
+    if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
   };
 
   const selectCalendarDate = (dayNum) => {
@@ -166,6 +176,9 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
     const newDateKey = `${calendarYear}-${mmStr}-${ddStr}`;
     setMatchDate(newDateKey);
     setShowCalendar(false);
+    const parentConfig = configData?.matches_tab;
+    const actionConfig = parentConfig?.content?.select_calendar_day;
+    if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
   };
 
   return (
@@ -222,7 +235,12 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
             </View>
 
             <View style={styles.calendarFooter}>
-              <Pressable style={styles.calendarCloseBtn} onPress={() => setShowCalendar(false)}>
+              <Pressable style={styles.calendarCloseBtn} onPress={() => {
+                setShowCalendar(false);
+                const parentConfig = configData?.matches_tab;
+                const actionConfig = parentConfig?.content?.close_calendar;
+                if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+              }}>
                 <Text style={styles.calendarCloseBtnText}>Close</Text>
               </Pressable>
             </View>
@@ -232,7 +250,12 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 12 }}>
         <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>📅 Fixtures & Schedule</Text>
-        <Pressable style={styles.calendarHeaderBtn} onPress={() => setShowCalendar(true)}>
+        <Pressable style={styles.calendarHeaderBtn} onPress={() => {
+          setShowCalendar(true);
+          const parentConfig = configData?.matches_tab;
+          const actionConfig = parentConfig?.content?.selectdate;
+          if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+        }}>
           <Text style={styles.calendarHeaderBtnText}>📅 Select Date</Text>
         </Pressable>
       </View>
@@ -247,7 +270,12 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
           <Pressable
             key={dateInfo.key}
             style={[styles.dateTabScrollBtn, matchDate === dateInfo.key && styles.dateTabBtnActive]}
-            onPress={() => setMatchDate(dateInfo.key)}
+            onPress={() => {
+              setMatchDate(dateInfo.key);
+              const parentConfig = configData?.matches_tab;
+              const actionConfig = parentConfig?.content?.date_tab_click;
+              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+            }}
           >
             <Text
               numberOfLines={1}
@@ -281,8 +309,16 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
                 return rankA - rankB;
               });
 
-              return sortedLeagues.map((league) => {
+              const adsConfig = configData?.matches_tab_ads || {};
+              const masterEnable = configData?.show_ads?.enable !== false;
+              const showAds = masterEnable && adsConfig.enable && Array.isArray(adsConfig.url) && adsConfig.url.length > 0;
+              const cardFreq = adsConfig.card || 1;
+              let matchGlobalIndex = 0;
+              let matchAdCounter = 0;
+
+              return sortedLeagues.map((league, index) => {
                 const isWorldCup = league.name && (league.name.toLowerCase().includes('world cup') || league.name.toLowerCase().includes('worldcup'));
+
                 return (
                   <View key={league.id} style={{ marginBottom: 16 }}>
                     <View style={{
@@ -316,6 +352,13 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
                     </View>
 
                     {(league.matches || []).map((matchItem) => {
+                      matchGlobalIndex++;
+                      let matchAdItem = null;
+                      if (showAds && matchGlobalIndex % cardFreq === 0) {
+                        matchAdItem = adsConfig.url[matchAdCounter % adsConfig.url.length];
+                        matchAdCounter++;
+                      }
+
                       const isLive = matchItem.status?.ongoing || false;
                       const isFinished = matchItem.status?.finished || false;
                       const isStarted = isLive || isFinished || matchItem.status?.started;
@@ -334,48 +377,55 @@ export default function MatchesTab({ isMockMode, onSelectMatch }) {
                       }
 
                       return (
-                        <Pressable
-                          key={matchItem.id}
-                          style={({ pressed }) => [styles.matchCard, pressed && styles.cardPressed, { marginBottom: 8 }]}
-                          onPress={() => onSelectMatch(matchItem.id)}
-                        >
-                          <View style={styles.matchCardHeader}>
-                            <Text style={styles.matchStage}>{api.formatTournamentStage(matchItem.tournamentStage) || 'Match'}</Text>
-                            {isLive && (
-                              <View style={styles.liveIndicator}>
-                                <View style={styles.pulseDot} />
-                                <Text style={styles.liveLabel}>{matchTime || 'LIVE'}</Text>
-                              </View>
-                            )}
-                            {!isLive && !isFinished && <Text style={styles.scheduledLabel}>{api.convertToAMPM(matchItem.time) || 'Scheduled'}</Text>}
-                          </View>
+                        <React.Fragment key={matchItem.id}>
+                          <Pressable
+                            style={({ pressed }) => [styles.matchCard, pressed && styles.cardPressed, { marginBottom: 8 }]}
+                            onPress={() => {
+                              onSelectMatch(matchItem.id);
+                              const parentConfig = configData?.matches_tab;
+                              const actionConfig = parentConfig?.content?.match_card_click;
+                              if (actionConfig) handleConfigAction(actionConfig, pushScreen, configData, parentConfig);
+                            }}
+                          >
+                            <View style={styles.matchCardHeader}>
+                              <Text style={styles.matchStage}>{api.formatTournamentStage(matchItem.tournamentStage) || 'Match'}</Text>
+                              {isLive && (
+                                <View style={styles.liveIndicator}>
+                                  <View style={styles.pulseDot} />
+                                  <Text style={styles.liveLabel}>{matchTime || 'LIVE'}</Text>
+                                </View>
+                              )}
+                              {!isLive && !isFinished && <Text style={styles.scheduledLabel}>{api.convertToAMPM(matchItem.time) || 'Scheduled'}</Text>}
+                            </View>
 
-                          <View style={styles.matchTeamsRow}>
-                            <View style={[styles.teamColumn, { flexDirection: 'column', alignItems: 'center', gap: 6 }]}>
-                              <FotmobImage
-                                id={matchItem.home?.id}
-                                type="team"
-                                style={{ width: 28, height: 28 }}
-                              />
-                              <Text style={[styles.teamText, { textAlign: 'center', fontSize: 12 }]} numberOfLines={1}>
-                                {matchItem.home?.name || 'Home'}
-                              </Text>
+                            <View style={styles.matchTeamsRow}>
+                              <View style={[styles.teamColumn, { flexDirection: 'column', alignItems: 'center', gap: 6 }]}>
+                                <FotmobImage
+                                  id={matchItem.home?.id}
+                                  type="team"
+                                  style={{ width: 28, height: 28 }}
+                                />
+                                <Text style={[styles.teamText, { textAlign: 'center', fontSize: 12 }]} numberOfLines={1}>
+                                  {matchItem.home?.name || 'Home'}
+                                </Text>
+                              </View>
+                              <View style={[styles.scoreContainer, { paddingHorizontal: 12, borderRadius: 6 }]}>
+                                <Text style={styles.scoreText}>{scoreStr}</Text>
+                              </View>
+                              <View style={[styles.teamColumn, { flexDirection: 'column', alignItems: 'center', gap: 6 }]}>
+                                <FotmobImage
+                                  id={matchItem.away?.id}
+                                  type="team"
+                                  style={{ width: 28, height: 28 }}
+                                />
+                                <Text style={[styles.teamText, { textAlign: 'center', fontSize: 12 }]} numberOfLines={1}>
+                                  {matchItem.away?.name || 'Away'}
+                                </Text>
+                              </View>
                             </View>
-                            <View style={[styles.scoreContainer, { paddingHorizontal: 12, borderRadius: 6 }]}>
-                              <Text style={styles.scoreText}>{scoreStr}</Text>
-                            </View>
-                            <View style={[styles.teamColumn, { flexDirection: 'column', alignItems: 'center', gap: 6 }]}>
-                              <FotmobImage
-                                id={matchItem.away?.id}
-                                type="team"
-                                style={{ width: 28, height: 28 }}
-                              />
-                              <Text style={[styles.teamText, { textAlign: 'center', fontSize: 12 }]} numberOfLines={1}>
-                                {matchItem.away?.name || 'Away'}
-                              </Text>
-                            </View>
-                          </View>
-                        </Pressable>
+                          </Pressable>
+                          {matchAdItem && <AdCard ad={matchAdItem} pushScreen={pushScreen} />}
+                        </React.Fragment>
                       );
                     })}
                   </View>

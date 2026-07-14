@@ -18,11 +18,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.miralparmar05.goalsphere"
+      "bundleIdentifier": "com.goalsphere.football"
     },
     "android": {
       "googleServicesFile": "./google-services.json",
-      "package": "com.miralparmar05.goalsphere",
+      "package": "com.goalsphere.football",
       "backgroundColor": "#0A0D14",
       "enableProguardInReleaseBuilds": true,
       "adaptiveIcon": {

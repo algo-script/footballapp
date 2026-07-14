@@ -1,4 +1,4 @@
-package com.miralparmar05.goalsphere
+package com.goalsphere.football
 
 import android.os.Build
 import android.os.Bundle
